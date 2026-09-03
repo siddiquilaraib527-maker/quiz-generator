@@ -1,0 +1,33 @@
+# Quiz Generator Configuration
+llm:
+  model: "gemma3:4b"
+  temperature: 0.3
+  max_tokens: 2048
+
+quiz:
+  default_num_questions: 5
+  default_type: "multiple-choice"
+  default_difficulty: "medium"
+  supported_types:
+    - multiple-choice
+    - true-false
+    - short-answer
+    - mixed
+  max_questions: 50
+
+timer:
+  enabled: false
+  default_seconds_per_question: 30
+
+scoring:
+  history_file: "quiz_scores.json"
+
+question_bank:
+  storage_file: "question_bank.json"
+
+export:
+  default_format: "json"
+
+logging:
+  level: "INFO"
+  file: "quiz_gen.log"

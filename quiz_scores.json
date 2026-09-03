@@ -1,0 +1,74 @@
+[
+  {
+    "score": 4,
+    "total": 5,
+    "percentage": 80.0,
+    "time_taken": 0.0,
+    "topic": "Java Programming",
+    "timestamp": "2026-08-12T04:38:23.367952"
+  },
+  {
+    "score": 1,
+    "total": 5,
+    "percentage": 20.0,
+    "time_taken": 0.0,
+    "topic": "Ultimate Fighting Championship",
+    "timestamp": "2026-08-12T05:06:57.229074"
+  },
+  {
+    "score": 2,
+    "total": 5,
+    "percentage": 40.0,
+    "time_taken": 0.0,
+    "topic": "Integral University - Knowledge Test",
+    "timestamp": "2026-08-12T05:13:18.341961"
+  },
+  {
+    "score": 5,
+    "total": 5,
+    "percentage": 100.0,
+    "time_taken": 0.0,
+    "topic": "Integral University, Lucknow",
+    "timestamp": "2026-08-12T05:14:33.924940"
+  },
+  {
+    "score": 1,
+    "total": 3,
+    "percentage": 33.3,
+    "time_taken": 0.0,
+    "topic": "Ravi Kishan Biography & Career",
+    "timestamp": "2026-08-12T15:44:18.503407"
+  },
+  {
+    "score": 5,
+    "total": 5,
+    "percentage": 100.0,
+    "time_taken": 0.0,
+    "topic": "Narendra Modi",
+    "timestamp": "2026-08-12T15:57:59.209205"
+  },
+  {
+    "score": 2,
+    "total": 5,
+    "percentage": 40.0,
+    "time_taken": 0.0,
+    "topic": "Ravi Kishan",
+    "timestamp": "2026-09-03T12:42:10.260279"
+  },
+  {
+    "score": 2,
+    "total": 5,
+    "percentage": 40.0,
+    "time_taken": 0.0,
+    "topic": "Virat Kohli Cricket",
+    "timestamp": "2026-09-03T12:47:40.891487"
+  },
+  {
+    "score": 4,
+    "total": 5,
+    "percentage": 80.0,
+    "time_taken": 0.0,
+    "topic": "Virat Kohli",
+    "timestamp": "2026-09-03T12:50:16.798989"
+  }
+]
