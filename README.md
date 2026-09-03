@@ -1,8 +1,4 @@
-from pathlib import Path
-
-readme = """# QuizGen AI
-
-An AI-powered quiz generator built with Python, Streamlit, and Ollama. QuizGen AI lets users generate quizzes from any topic, customize difficulty and question types, take quizzes, calculate scores, and maintain a question bank.
+# Quiz Generator
 
 ## Features
 
