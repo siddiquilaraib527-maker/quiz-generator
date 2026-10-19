@@ -1,1 +1,151 @@
-[]
+[
+  {
+    "number": 1,
+    "type": "multiple-choice",
+    "question": "The OSI model is primarily used to:",
+    "answer": "B",
+    "options": [
+      "A) Manage network hardware like routers and switches.",
+      "B) Define a standardized framework for network communication.",
+      "C) Implement encryption algorithms for data security.",
+      "D) Monitor network traffic for performance issues."
+    ],
+    "explanation": "The OSI model provides a conceptual framework for understanding and designing network protocols. It breaks down the complex process of network communication into seven distinct layers.",
+    "topic": "OSI Model"
+  },
+  {
+    "number": 2,
+    "type": "multiple-choice",
+    "question": "Which layer of the OSI model is responsible for routing data packets between networks?",
+    "answer": "C",
+    "options": [
+      "A) Physical Layer",
+      "B) Data Link Layer",
+      "C) Network Layer",
+      "D) Transport Layer"
+    ],
+    "explanation": "The Network Layer (Layer 3) uses IP addresses to route data packets from source to destination across different networks.",
+    "topic": "OSI Model"
+  },
+  {
+    "number": 3,
+    "type": "multiple-choice",
+    "question": "The Physical Layer of the OSI model deals with:",
+    "answer": "B",
+    "options": [
+      "A) Establishing and maintaining connections between devices.",
+      "B) Formatting data for transmission and physical media like cables.",
+      "C) Ensuring reliable delivery of data packets.",
+      "D) Translating data between different protocols."
+    ],
+    "explanation": "The Physical Layer (Layer 1) is concerned with the physical characteristics of the network, including cabling, voltage levels, and data rates.",
+    "topic": "OSI Model"
+  },
+  {
+    "number": 1,
+    "type": "multiple-choice",
+    "question": "The OSI model is primarily used to:",
+    "answer": "B",
+    "options": [
+      "A) Manage network hardware like routers and switches.",
+      "B) Define a standardized framework for network communication.",
+      "C) Implement encryption algorithms for data security.",
+      "D) Monitor network traffic for performance issues."
+    ],
+    "explanation": "The OSI model provides a conceptual framework for understanding and designing network protocols. It breaks down the complex process of network communication into seven distinct layers.",
+    "topic": "OSI Model"
+  },
+  {
+    "number": 2,
+    "type": "multiple-choice",
+    "question": "Which layer of the OSI model is responsible for routing data packets between networks?",
+    "answer": "C",
+    "options": [
+      "A) Physical Layer",
+      "B) Data Link Layer",
+      "C) Network Layer",
+      "D) Transport Layer"
+    ],
+    "explanation": "The Network Layer (Layer 3) uses IP addresses to route data packets from source to destination across different networks.",
+    "topic": "OSI Model"
+  },
+  {
+    "number": 3,
+    "type": "multiple-choice",
+    "question": "The Physical Layer of the OSI model deals with:",
+    "answer": "B",
+    "options": [
+      "A) Establishing and maintaining connections between devices.",
+      "B) Formatting data for transmission and physical media like cables.",
+      "C) Ensuring reliable delivery of data packets.",
+      "D) Translating data between different protocols."
+    ],
+    "explanation": "The Physical Layer (Layer 1) is concerned with the physical characteristics of the network, including cabling, voltage levels, and data rates.",
+    "topic": "OSI Model"
+  },
+  {
+    "number": 1,
+    "type": "multiple-choice",
+    "question": "Which layer is referred to as the 'Heart of OSI Model'?",
+    "answer": "B",
+    "options": [
+      "A) Physical Layer",
+      "B) Transport Layer",
+      "C) Application Layer",
+      "D) Network Layer"
+    ],
+    "topic": "osi model"
+  },
+  {
+    "number": 2,
+    "type": "multiple-choice",
+    "question": "What is the primary function of the Network Layer?",
+    "answer": "B",
+    "options": [
+      "A) Providing reliable data transmission",
+      "B) Routing packets based on IP addresses",
+      "C) Managing network hardware devices",
+      "D) Displaying information to the user"
+    ],
+    "topic": "osi model"
+  },
+  {
+    "number": 3,
+    "type": "multiple-choice",
+    "question": "Data segments are created by which layer?",
+    "answer": "D",
+    "options": [
+      "A) Physical Layer",
+      "B) Network Layer",
+      "C) Data Link Layer",
+      "D) Transport Layer"
+    ],
+    "topic": "osi model"
+  },
+  {
+    "number": 4,
+    "type": "multiple-choice",
+    "question": "Which type of connectionless service allows for faster communication?",
+    "answer": "C",
+    "options": [
+      "A) Connection-oriented service",
+      "B) Reliable transmission",
+      "C) Connectionless service",
+      "D) Data transfer"
+    ],
+    "topic": "osi model"
+  },
+  {
+    "number": 5,
+    "type": "multiple-choice",
+    "question": "What is the main purpose of a NIC (Network Interface Card)?",
+    "answer": "B",
+    "options": [
+      "A) Routing network packets",
+      "B) Physically connecting devices to the network",
+      "C) Displaying information to the user",
+      "D) Managing IP addresses"
+    ],
+    "topic": "osi model"
+  }
+]

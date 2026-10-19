@@ -217,8 +217,26 @@ class QuizResult:
 def parse_response(text: str) -> dict:
     """Parse LLM response text into a quiz dict, handling code fences."""
     text = text.strip()
+
+    # Remove Markdown code fences
     if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+        lines = text.splitlines()
+
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+
+        text = "\n".join(lines).strip()
+
+    # Find the JSON object if the model added extra text
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end + 1]
+
     return json.loads(text)
 
 

@@ -7,8 +7,11 @@ Run with:
 
 import sys
 import os
+import io
+import re
 import json
 import time
+import html as html_lib
 
 import streamlit as st
 
@@ -18,8 +21,14 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 
 SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
+
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 
 from quiz_gen.core import (  # noqa: E402
     generate_quiz,
@@ -31,6 +40,9 @@ from quiz_gen.core import (  # noqa: E402
     ScoreTracker,
     QUIZ_TYPES,
 )
+
+from rag.vector_store import build_vector_store  # noqa: E402
+from rag.rag_quiz import generate_rag_quiz  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -46,10 +58,67 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------------------------
-# Professional UI
+# Helpers
 # ---------------------------------------------------------------------------
 
-st.markdown(
+def html(markup: str, target=st) -> None:
+    """Render HTML safely.
+
+    Strips indentation and blank lines so Markdown never mistakes the
+    HTML for a code block. `target` can be `st` or an `st.empty()` placeholder.
+    """
+    cleaned = "\n".join(
+        line.strip() for line in markup.splitlines() if line.strip()
+    )
+    target.markdown(cleaned, unsafe_allow_html=True)
+
+
+def esc(value) -> str:
+    """Escape text coming from the PDF / AI so it can't break the HTML."""
+    return html_lib.escape(str(value))
+
+
+def extract_pdf_text(data: bytes) -> str:
+    """Extract plain text from PDF bytes. Returns "" if no library/text is available."""
+    try:
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            from PyPDF2 import PdfReader  # type: ignore
+        reader = PdfReader(io.BytesIO(data))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception:
+        pass
+    try:
+        import fitz  # pymupdf
+
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            return "\n".join(page.get_text() for page in doc)
+    except Exception:
+        return ""
+
+
+def topic_in_text(topic: str, text: str) -> bool:
+    """Quick guard: does at least one meaningful word of the topic appear in the PDF?
+
+    If the PDF text is unavailable (e.g. scanned PDF), the check is skipped.
+    """
+    if not text.strip():
+        return True
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", topic.lower()) if len(w) >= 3]
+    if not words:
+        return True
+    haystack = text.lower()
+    return any(
+        re.search(rf"\b{re.escape(w)}(?:s|es)?\b", haystack) for w in words
+    )
+
+
+# ---------------------------------------------------------------------------
+# Professional UI (CSS)
+# ---------------------------------------------------------------------------
+
+html(
     """
 <style>
 /* -------------------- Global -------------------- */
@@ -62,7 +131,6 @@ st.markdown(
     color: #f8fafc;
 }
 
-/* Remove Streamlit's default top header */
 header[data-testid="stHeader"] {
     background: transparent !important;
     box-shadow: none !important;
@@ -72,7 +140,6 @@ div[data-testid="stDecoration"] {
     display: none !important;
 }
 
-/* Main content */
 .block-container {
     max-width: 1380px;
     padding-top: 1rem !important;
@@ -82,7 +149,6 @@ div[data-testid="stDecoration"] {
 footer {
     visibility: hidden;
 }
-
 
 /* -------------------- Sidebar -------------------- */
 
@@ -119,7 +185,6 @@ section[data-testid="stSidebar"] h3 {
     margin-top: 5px;
 }
 
-
 /* -------------------- Inputs -------------------- */
 
 input,
@@ -147,13 +212,11 @@ div[data-baseweb="select"] svg {
     fill: #cbd5e1 !important;
 }
 
-
 /* -------------------- Typography -------------------- */
 
 h1, h2, h3 {
     color: #f8fafc !important;
 }
-
 
 /* -------------------- Header -------------------- */
 
@@ -200,7 +263,6 @@ h1, h2, h3 {
     font-weight: 650;
 }
 
-
 /* -------------------- Sections -------------------- */
 
 .section-title {
@@ -216,7 +278,6 @@ h1, h2, h3 {
     font-size: .86rem;
     margin-bottom: 18px;
 }
-
 
 /* -------------------- Cards -------------------- */
 
@@ -248,7 +309,6 @@ h1, h2, h3 {
     font-size: .76rem;
     margin-top: 4px;
 }
-
 
 /* -------------------- Questions -------------------- */
 
@@ -282,7 +342,6 @@ h1, h2, h3 {
     font-size: .93rem;
 }
 
-
 /* -------------------- Buttons -------------------- */
 
 .stButton > button {
@@ -306,9 +365,6 @@ h1, h2, h3 {
 .stButton > button:hover {
     background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
     color: #ffffff !important;
-}
-
-.stButton > button:hover {
     transform: translateY(-1px);
     box-shadow: 0 9px 22px rgba(99,102,241,.28);
 }
@@ -328,7 +384,6 @@ h1, h2, h3 {
     color: #ffffff !important;
 }
 
-
 /* -------------------- Tabs -------------------- */
 
 button[data-baseweb="tab"] {
@@ -344,7 +399,6 @@ div[data-baseweb="tab-highlight"] {
     background-color: #6366f1 !important;
 }
 
-
 /* -------------------- Expander -------------------- */
 
 div[data-testid="stExpander"] {
@@ -358,14 +412,12 @@ div[data-testid="stExpander"] summary {
     color: #e2e8f0 !important;
 }
 
-
 /* -------------------- Radio / checkbox -------------------- */
 
 div[data-testid="stCheckbox"] label,
 div[data-testid="stRadio"] label {
     color: #cbd5e1 !important;
 }
-
 
 /* -------------------- Ollama status -------------------- */
 
@@ -397,7 +449,6 @@ div[data-testid="stRadio"] label {
     margin-top: 3px;
 }
 
-
 /* -------------------- Score -------------------- */
 
 .score-card {
@@ -420,15 +471,13 @@ div[data-testid="stRadio"] label {
     color: #94a3b8;
 }
 
-
 /* -------------------- Misc -------------------- */
 
 hr {
     border-color: #1e293b !important;
 }
 </style>
-""",
-    unsafe_allow_html=True,
+"""
 )
 
 
@@ -450,21 +499,70 @@ if "quiz_submitted" not in st.session_state:
 if "quiz_start_time" not in st.session_state:
     st.session_state.quiz_start_time = None
 
+if "rag_ready" not in st.session_state:
+    st.session_state.rag_ready = False
+
+if "pdf_text" not in st.session_state:
+    st.session_state.pdf_text = ""
+
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown(
+    html(
         """
 <div class="brand">
     <div class="brand-title">QuizGen AI</div>
     <div class="brand-subtitle">Local AI-powered quiz generator</div>
 </div>
-""",
-        unsafe_allow_html=True,
+"""
     )
+
+    st.markdown("### RAG Knowledge Base")
+
+    uploaded_pdf = st.file_uploader(
+        "Upload Study PDF",
+        type=["pdf"],
+        help="Upload a PDF to generate quizzes from its content.",
+    )
+
+    build_rag = st.button(
+        "Build Knowledge Base",
+        use_container_width=True,
+    )
+
+    if build_rag:
+        if uploaded_pdf is None:
+            st.warning("Please upload a PDF first.")
+        else:
+            try:
+                data_dir = os.path.join(PROJECT_ROOT, "rag", "data")
+                os.makedirs(data_dir, exist_ok=True)
+
+                pdf_path = os.path.join(data_dir, uploaded_pdf.name)
+
+                with open(pdf_path, "wb") as file:
+                    file.write(uploaded_pdf.getbuffer())
+
+                with st.spinner("Building RAG knowledge base..."):
+                    build_vector_store(pdf_path)
+
+                st.session_state.pdf_text = extract_pdf_text(bytes(uploaded_pdf.getbuffer()))
+                st.session_state.rag_ready = True
+                st.success(f"Knowledge base created from {uploaded_pdf.name}")
+                if not st.session_state.pdf_text.strip():
+                    st.warning(
+                        "Topic check is OFF: could not read text from this PDF. "
+                        "Install it with: pip install pypdf"
+                    )
+
+            except Exception as exc:
+                st.session_state.rag_ready = False
+                st.error(f"RAG build failed: {exc}")
+
+    st.divider()
 
     st.markdown("### Quiz Settings")
 
@@ -480,11 +578,8 @@ with st.sidebar:
         value=cfg.get("quiz", "default_num_questions", default=5),
     )
 
-    quiz_type = st.selectbox(
-        "Question type",
-        QUIZ_TYPES,
-        index=0,
-    )
+    # Only multiple-choice questions are supported
+    quiz_type = "multiple-choice"
 
     difficulty = st.select_slider(
         "Difficulty",
@@ -502,24 +597,22 @@ with st.sidebar:
     ollama_ok = check_ollama_running()
 
     if ollama_ok:
-        st.markdown(
+        html(
             """
 <div class="status-online">
     <div class="status-title">Ollama Online</div>
     <div class="status-text">Local AI engine is ready</div>
 </div>
-""",
-            unsafe_allow_html=True,
+"""
         )
     else:
-        st.markdown(
+        html(
             """
 <div class="status-offline">
     <div class="status-title">Ollama Offline</div>
     <div class="status-text">Start Ollama to generate quizzes</div>
 </div>
-""",
-            unsafe_allow_html=True,
+"""
         )
 
     st.caption("Powered by Ollama and Gemma")
@@ -529,7 +622,7 @@ with st.sidebar:
 # Main header
 # ---------------------------------------------------------------------------
 
-st.markdown(
+html(
     """
 <div class="hero">
     <div class="hero-title">Quiz<span class="accent">Gen AI</span></div>
@@ -537,10 +630,9 @@ st.markdown(
         Create intelligent quizzes locally using AI.<br>
         Generate, practice, analyze and store your quizzes.
     </div>
-    <div class="hero-badge">Local AI &nbsp;•&nbsp; Private &nbsp;•&nbsp; Powered by Ollama</div>
+    <div class="hero-badge">Local AI • Private • Powered by Ollama</div>
 </div>
-""",
-    unsafe_allow_html=True,
+"""
 )
 
 
@@ -558,49 +650,45 @@ tab_gen, tab_take, tab_bank, tab_history = st.tabs(
 # ===========================================================================
 
 with tab_gen:
-    st.markdown(
+    html(
         """
 <div class="section-title">Create Your Quiz</div>
 <div class="section-subtitle">
     Configure your topic and let your local AI generate the questions.
 </div>
-""",
-        unsafe_allow_html=True,
+"""
     )
 
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.markdown(
+        html(
             f"""
 <div class="metric-card">
     <div class="metric-value">{num_questions}</div>
     <div class="metric-label">Questions</div>
 </div>
-""",
-            unsafe_allow_html=True,
+"""
         )
 
     with c2:
-        st.markdown(
+        html(
             f"""
 <div class="metric-card">
-    <div class="metric-value">{difficulty.title()}</div>
+    <div class="metric-value">{esc(difficulty.title())}</div>
     <div class="metric-label">Difficulty</div>
 </div>
-""",
-            unsafe_allow_html=True,
+"""
         )
 
     with c3:
-        st.markdown(
+        html(
             f"""
 <div class="metric-card">
-    <div class="metric-value">{quiz_type.replace("-", " ").title()}</div>
+    <div class="metric-value">{esc(quiz_type.replace("-", " ").title())}</div>
     <div class="metric-label">Question Type</div>
 </div>
-""",
-            unsafe_allow_html=True,
+"""
         )
 
     st.markdown("")
@@ -613,31 +701,36 @@ with tab_gen:
 
     if generate_clicked:
         if not ollama_ok:
+            st.error("Ollama is not running. Please start Ollama and try again.")
+        elif not st.session_state.rag_ready:
+            st.error("Please upload a PDF and click Build Knowledge Base first.")
+        elif not topic_in_text(
+            topic,
+            st.session_state.pdf_text
+            or (extract_pdf_text(bytes(uploaded_pdf.getbuffer())) if uploaded_pdf else ""),
+        ):
+            st.session_state.quiz_data = None
             st.error(
-                "Ollama is not running. Please start Ollama and try again."
+                f'The topic "{topic}" does not appear to be covered in the uploaded PDF. '
+                "Please enter a topic from the document."
             )
         else:
             progress = st.empty()
-            progress.markdown(
+            html(
                 """
 <div class="card">
     <b>Generating your quiz...</b><br>
-    <span style="color:#94a3b8;">
-        Your local AI is creating the questions. This may take a few seconds.
-    </span>
+    <span style="color:#94a3b8;">Your local AI is creating the questions. This may take a few seconds.</span>
 </div>
 """,
-                unsafe_allow_html=True,
+                progress,
             )
 
+            # Clear the previous quiz so an old one is not shown next to an error
+            st.session_state.quiz_data = None
+
             try:
-                quiz = generate_quiz(
-                    topic,
-                    num_questions,
-                    quiz_type,
-                    difficulty,
-                    config=cfg,
-                )
+                quiz = generate_rag_quiz(topic, num_questions)
 
                 st.session_state.quiz_data = quiz
                 st.session_state.user_answers = {}
@@ -656,26 +749,22 @@ with tab_gen:
     if quiz:
         st.markdown("")
 
-        st.markdown(
+        html(
             f"""
 <div class="hero">
-    <div class="hero-title">{quiz.get("title", "Generated Quiz")}</div>
-    <div class="hero-subtitle">
-        Topic: {quiz.get("topic", topic)}
-    </div>
+    <div class="hero-title">{esc(quiz.get("title", "Generated Quiz"))}</div>
+    <div class="hero-subtitle">Topic: {esc(quiz.get("topic", topic))}</div>
 </div>
-""",
-            unsafe_allow_html=True,
+"""
         )
 
         questions = quiz.get("questions", [])
 
-        st.markdown(
+        html(
             f"""
 <div class="section-title">{len(questions)} Questions</div>
 <div class="section-subtitle">Review your generated questions below.</div>
-""",
-            unsafe_allow_html=True,
+"""
         )
 
         for index, q in enumerate(questions, 1):
@@ -684,21 +773,17 @@ with tab_gen:
             q_type = q.get("type", quiz_type)
 
             options_html = ""
-
             for option in q.get("options", []) or []:
-                options_html += f'<div class="option">• {option}</div>'
+                options_html += f'<div class="option">• {esc(option)}</div>'
 
-            st.markdown(
+            html(
                 f"""
 <div class="question-card">
-    <div class="question-number">
-        Question {number} &nbsp;•&nbsp; {q_type.replace("-", " ").title()}
-    </div>
-    <div class="question-text">{question}</div>
+    <div class="question-number">Question {number} • {esc(q_type.replace("-", " ").title())}</div>
+    <div class="question-text">{esc(question)}</div>
     <div style="margin-top:14px;">{options_html}</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
             with st.expander(f"Show answer and explanation — Q{number}"):
@@ -712,11 +797,7 @@ with tab_gen:
         col1, col2 = st.columns(2)
 
         with col1:
-            json_str = json.dumps(
-                quiz,
-                indent=2,
-                ensure_ascii=False,
-            )
+            json_str = json.dumps(quiz, indent=2, ensure_ascii=False)
 
             st.download_button(
                 "Download JSON",
@@ -743,14 +824,11 @@ with tab_gen:
 # ===========================================================================
 
 with tab_take:
-    st.markdown(
+    html(
         """
 <div class="section-title">Take Your Quiz</div>
-<div class="section-subtitle">
-    Test yourself and track your performance.
-</div>
-""",
-        unsafe_allow_html=True,
+<div class="section-subtitle">Test yourself and track your performance.</div>
+"""
     )
 
     quiz = st.session_state.quiz_data
@@ -763,14 +841,13 @@ with tab_take:
         if enable_timer and st.session_state.quiz_start_time:
             elapsed = time.time() - st.session_state.quiz_start_time
 
-            st.markdown(
+            html(
                 f"""
 <div class="metric-card">
     <div class="metric-value">{elapsed:.0f}s</div>
     <div class="metric-label">Elapsed time</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
         st.markdown("")
@@ -780,14 +857,13 @@ with tab_take:
                 number = q.get("number", 0)
                 key = f"q_{number}"
 
-                st.markdown(
+                html(
                     f"""
 <div class="question-card">
     <div class="question-number">Question {number}</div>
-    <div class="question-text">{q.get("question", "")}</div>
+    <div class="question-text">{esc(q.get("question", ""))}</div>
 </div>
-""",
-                    unsafe_allow_html=True,
+"""
                 )
 
                 if (
@@ -832,48 +908,31 @@ with tab_take:
 
             percentage = result.percentage
 
-            st.markdown(
+            html(
                 f"""
 <div class="score-card">
     <div class="score-number">{percentage:.0f}%</div>
-    <div class="score-label">
-        {result.score} correct out of {result.total}
-    </div>
+    <div class="score-label">{result.score} correct out of {result.total}</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
             st.markdown("### Answer Review")
 
             for q, ua in zip(questions, user_ans_list):
-                correct = (
-                    ua.strip().lower()
-                    == q.get("answer", "").strip().lower()
-                )
-
+                correct = ua.strip().lower() == q.get("answer", "").strip().lower()
                 status = "Correct" if correct else "Incorrect"
 
-                with st.expander(
-                    f"{status} — Question {q.get('number')}"
-                ):
+                with st.expander(f"{status} — Question {q.get('number')}"):
                     st.write(q.get("question", ""))
-                    st.markdown(
-                        f"**Your answer:** {ua or 'Not answered'}"
-                    )
-                    st.markdown(
-                        f"**Correct answer:** {q.get('answer', 'N/A')}"
-                    )
+                    st.markdown(f"**Your answer:** {ua or 'Not answered'}")
+                    st.markdown(f"**Correct answer:** {q.get('answer', 'N/A')}")
 
                     if q.get("explanation"):
                         st.info(q["explanation"])
 
             tracker = ScoreTracker(
-                cfg.get(
-                    "scoring",
-                    "history_file",
-                    default="quiz_scores.json",
-                )
+                cfg.get("scoring", "history_file", default="quiz_scores.json")
             )
             tracker.record(result)
 
@@ -883,14 +942,11 @@ with tab_take:
 # ===========================================================================
 
 with tab_bank:
-    st.markdown(
+    html(
         """
 <div class="section-title">Question Bank</div>
-<div class="section-subtitle">
-    Save and manage questions generated by your local AI.
-</div>
-""",
-        unsafe_allow_html=True,
+<div class="section-subtitle">Save and manage questions generated by your local AI.</div>
+"""
     )
 
     bank_path = cfg.get(
@@ -920,38 +976,25 @@ with tab_bank:
     quiz = st.session_state.quiz_data
 
     if quiz:
-        if st.button(
-            "Add Current Quiz to Bank",
-            use_container_width=True,
-        ):
+        if st.button("Add Current Quiz to Bank", use_container_width=True):
             added = qb.add_from_quiz(quiz)
             st.success(f"Added {added} questions to the question bank.")
             st.rerun()
 
-    questions = (
-        qb.filter(topic=filter_topic)
-        if filter_topic
-        else qb.all()
-    )
+    questions = qb.filter(topic=filter_topic) if filter_topic else qb.all()
 
     if questions:
         for i, q in enumerate(questions, 1):
-            st.markdown(
+            html(
                 f"""
 <div class="question-card">
-    <div class="question-number">
-        Question {i} &nbsp;•&nbsp; {q.q_type}
-    </div>
-    <div class="question-text">{q.question}</div>
+    <div class="question-number">Question {i} • {esc(q.q_type)}</div>
+    <div class="question-text">{esc(q.question)}</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
     else:
-        st.info(
-            "Your question bank is empty. "
-            "Generate a quiz and add it here."
-        )
+        st.info("Your question bank is empty. Generate a quiz and add it here.")
 
 
 # ===========================================================================
@@ -959,22 +1002,15 @@ with tab_bank:
 # ===========================================================================
 
 with tab_history:
-    st.markdown(
+    html(
         """
 <div class="section-title">Performance Analytics</div>
-<div class="section-subtitle">
-    Track your quiz performance over time.
-</div>
-""",
-        unsafe_allow_html=True,
+<div class="section-subtitle">Track your quiz performance over time.</div>
+"""
     )
 
     tracker = ScoreTracker(
-        cfg.get(
-            "scoring",
-            "history_file",
-            default="quiz_scores.json",
-        )
+        cfg.get("scoring", "history_file", default="quiz_scores.json")
     )
 
     history = tracker.history()
@@ -987,102 +1023,74 @@ with tab_history:
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown(
+            html(
                 f"""
 <div class="metric-card">
     <div class="metric-value">{average:.1f}%</div>
     <div class="metric-label">Average Score</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
         with col2:
-            best_score = (
-                best.get("percentage", 0)
-                if best
-                else 0
-            )
+            best_score = best.get("percentage", 0) if best else 0
 
-            st.markdown(
+            html(
                 f"""
 <div class="metric-card">
     <div class="metric-value">{best_score:.0f}%</div>
     <div class="metric-label">Best Score</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
         with col3:
-            st.markdown(
+            html(
                 f"""
 <div class="metric-card">
     <div class="metric-value">{total_attempts}</div>
     <div class="metric-label">Quiz Attempts</div>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
         st.markdown("### Score Progress")
 
         chart_data = [
-            {
-                "attempt": i + 1,
-                "percentage": h.get("percentage", 0),
-            }
+            {"attempt": i + 1, "percentage": h.get("percentage", 0)}
             for i, h in enumerate(history)
         ]
 
-        st.line_chart(
-            chart_data,
-            x="attempt",
-            y="percentage",
-        )
+        st.line_chart(chart_data, x="attempt", y="percentage")
 
         st.markdown("### Recent Attempts")
 
         for item in reversed(history[-5:]):
-            st.markdown(
+            html(
                 f"""
 <div class="card">
-    <b>{item.get("topic", "Quiz")}</b>
-    <span style="float:right;color:#818cf8;">
-        {item.get("percentage", 0):.0f}%
-    </span>
+    <b>{esc(item.get("topic", "Quiz"))}</b>
+    <span style="float:right;color:#818cf8;">{item.get("percentage", 0):.0f}%</span>
 </div>
-""",
-                unsafe_allow_html=True,
+"""
             )
 
-        if st.button(
-            "Clear Score History",
-            use_container_width=True,
-        ):
+        if st.button("Clear Score History", use_container_width=True):
             tracker.clear()
             st.rerun()
 
     else:
-        st.info(
-            "No quiz attempts yet. Take a quiz to start building your analytics."
-        )
+        st.info("No quiz attempts yet. Take a quiz to start building your analytics.")
 
 
 # ---------------------------------------------------------------------------
 # Footer
 # ---------------------------------------------------------------------------
 
-st.markdown(
+html(
     """
-<div style="
-    text-align:center;
-    color:#475569;
-    font-size:.76rem;
-    padding:35px 0 10px 0;
-">
-    QuizGen AI &nbsp;•&nbsp; Local AI Quiz Platform &nbsp;•&nbsp; Ollama
+<div style="text-align:center;color:#475569;font-size:.76rem;padding:35px 0 10px 0;">
+    QuizGen AI • Local AI Quiz Platform • Ollama
 </div>
-""",
-    unsafe_allow_html=True,
+"""
 )

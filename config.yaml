@@ -2,7 +2,7 @@
 llm:
   model: "gemma3:4b"
   temperature: 0.3
-  max_tokens: 2048
+  max_tokens: 1536
 
 quiz:
   default_num_questions: 5

@@ -1,6 +1,11 @@
 """
-Common Ollama/Gemma 4 Client Utility
+Common Ollama/Gemma Client Utility
 Shared across all 90 projects for consistent LLM interaction.
+
+Speed notes:
+- keep_alive keeps the model loaded in memory, so only the first call is slow.
+- num_ctx is limited so the model does not allocate a huge context window.
+- json_mode makes the model output only JSON (less extra text, faster, easier to parse).
 """
 
 import requests
@@ -11,6 +16,12 @@ from typing import Optional, Generator
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "gemma3:4b"
+
+# Keep the model in memory between requests (avoids reloading every time).
+KEEP_ALIVE = "30m"
+
+# Smaller context = faster. Raise it only if your prompts get cut off.
+NUM_CTX = 4096
 
 
 def check_ollama_running() -> bool:
@@ -32,22 +43,34 @@ def list_models() -> list:
         return []
 
 
+def _options(temperature: float, max_tokens: int, num_ctx: int) -> dict:
+    return {
+        "temperature": temperature,
+        "num_predict": max_tokens,
+        "num_ctx": num_ctx,
+    }
+
+
 def chat(
     messages: list[dict],
     model: str = DEFAULT_MODEL,
     system_prompt: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
+    num_ctx: int = NUM_CTX,
+    json_mode: bool = False,
 ) -> str:
     """
     Send a chat request to Ollama and return the full response.
 
     Args:
         messages: List of {"role": "user"|"assistant", "content": "..."} dicts
-        model: Model name (default: gemma4)
+        model: Model name
         system_prompt: Optional system prompt
         temperature: Creativity (0.0-1.0)
-        max_tokens: Max response tokens
+        max_tokens: Max response tokens (lower = faster)
+        num_ctx: Context window size (lower = faster)
+        json_mode: Force the model to reply with valid JSON only
 
     Returns:
         The assistant's response text
@@ -59,11 +82,11 @@ def chat(
         "model": model,
         "messages": messages,
         "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-        },
+        "keep_alive": KEEP_ALIVE,
+        "options": _options(temperature, max_tokens, num_ctx),
     }
+    if json_mode:
+        payload["format"] = "json"
 
     try:
         resp = requests.post(
@@ -87,6 +110,7 @@ def chat_stream(
     system_prompt: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
+    num_ctx: int = NUM_CTX,
 ) -> Generator[str, None, None]:
     """
     Stream a chat response from Ollama token by token.
@@ -101,10 +125,8 @@ def chat_stream(
         "model": model,
         "messages": messages,
         "stream": True,
-        "options": {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-        },
+        "keep_alive": KEEP_ALIVE,
+        "options": _options(temperature, max_tokens, num_ctx),
     }
 
     try:
@@ -134,6 +156,8 @@ def generate(
     system_prompt: Optional[str] = None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
+    num_ctx: int = NUM_CTX,
+    json_mode: bool = False,
 ) -> str:
     """
     Simple single-turn generation (non-chat API).
@@ -143,7 +167,9 @@ def generate(
         model: Model name
         system_prompt: Optional system instruction
         temperature: Creativity level
-        max_tokens: Max response tokens
+        max_tokens: Max response tokens (lower = faster)
+        num_ctx: Context window size (lower = faster)
+        json_mode: Force the model to reply with valid JSON only
 
     Returns:
         Generated text
@@ -152,13 +178,13 @@ def generate(
         "model": model,
         "prompt": prompt,
         "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-        },
+        "keep_alive": KEEP_ALIVE,
+        "options": _options(temperature, max_tokens, num_ctx),
     }
     if system_prompt:
         payload["system"] = system_prompt
+    if json_mode:
+        payload["format"] = "json"
 
     try:
         resp = requests.post(
@@ -180,6 +206,9 @@ def embed(text: str, model: str = DEFAULT_MODEL) -> list[float]:
     """
     Get embeddings for text using Ollama.
 
+    Tip: for speed, pass a small dedicated embedding model such as
+    "nomic-embed-text" instead of the chat model.
+
     Args:
         text: Input text to embed
         model: Model name
@@ -187,7 +216,7 @@ def embed(text: str, model: str = DEFAULT_MODEL) -> list[float]:
     Returns:
         List of floats (embedding vector)
     """
-    payload = {"model": model, "input": text}
+    payload = {"model": model, "input": text, "keep_alive": KEEP_ALIVE}
     try:
         resp = requests.post(
             f"{OLLAMA_BASE_URL}/api/embed",
